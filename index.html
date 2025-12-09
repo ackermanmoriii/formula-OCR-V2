@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Math Architect | معمار ریاضی جمینای</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=JetBrains+Mono:wght@400;700&family=Vazirmatn:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        body { font-family: 'Vazirmatn', 'Inter', sans-serif; background-color: #f5f5f7; color: #1d1d1f; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d1d1d6; border-radius: 10px; }
+        
+        /* Strict LTR for Math */
+        .math-code {
+            direction: ltr !important;
+            unicode-bidi: isolate;
+            display: inline-block;
+            background-color: #f1f5f9;
+            color: #0f172a;
+            padding: 3px 10px;
+            border-radius: 8px;
+            margin: 0 4px;
+            font-size: 1.05em;
+            border: 1px solid #e2e8f0;
+            vertical-align: middle;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .variable-link {
+            color: #2563eb;
+            font-weight: 700;
+            cursor: pointer;
+            border-bottom: 1.5px dashed rgba(37, 99, 235, 0.4);
+        }
+        .variable-link:hover { color: #1e40af; background-color: rgba(37, 99, 235, 0.1); }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+
+        .apple-card {
+            background: #ffffff;
+            border-radius: 18px;
+            box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.05);
+            border: 1px solid #f0f0f0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .apple-card:hover { transform: translateY(-2px); box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.1); }
+
+        .drop-zone { border: 2px dashed #cbd5e1; transition: all 0.3s ease; }
+        .drop-zone:hover { border-color: #3b82f6; background-color: #eff6ff; }
+
+        /* Popups */
+        .modal {
+            display: none; position: fixed; z-index: 60;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes modalFadeIn {
+            from { opacity: 0; transform: translate(-50%, -48%) scale(0.96); }
+            to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+        }
+        #overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0, 0, 0, 0.3); backdrop-filter: blur(4px);
+            z-index: 50; animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* HTML Tooltip for Chart */
+        #chartjs-tooltip {
+            opacity: 0; position: absolute;
+            background: rgba(255, 255, 255, 0.98);
+            color: #1e293b;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            pointer-events: none;
+            padding: 12px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            font-family: 'Vazirmatn', sans-serif;
+            text-align: right; direction: rtl;
+            transition: all 0.1s ease;
+            min-width: 180px;
+        }
+        
+        /* Saved Items List */
+        .saved-item {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .saved-item:hover {
+            background-color: #f8fafc;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden text-right bg-[#f5f5f7]">
+
+    <header class="glass-panel z-20 px-6 py-4 flex-none">
+        <div class="max-w-[1600px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-500/30">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-slate-800 tracking-tight">معمار ریاضی جمینای</h1>
+                    <p class="text-xs text-slate-500 font-medium">تحلیل معنایی و بصری اسناد علمی</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button onclick="window.saveToFirebase()" id="btn-save-cloud" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors items-center gap-2 shadow-lg shadow-emerald-500/20">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    ذخیره در دیتابیس
+                </button>
+
+                <div class="flex items-center gap-2 mr-2 border-r border-gray-300 pr-4">
+                    <div class="flex items-center gap-2 bg-white p-1 rounded-xl border border-gray-200 shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20">
+                        <button onclick="window.setApiKey()" class="bg-slate-900 hover:bg-black text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors">
+                            اتصال
+                        </button>
+                        <input type="password" id="api-key" dir="ltr" placeholder="Gemini API Key" class="bg-transparent outline-none px-2 py-1 text-sm w-48 text-slate-600">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="connection-status" class="text-center text-xs font-bold mt-1 h-4 text-emerald-600 opacity-0 transition-opacity"></div>
+    </header>
+
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden max-w-[1600px] mx-auto w-full p-4 gap-6">
+        
+        <aside class="w-full md:w-[380px] flex flex-col gap-4 flex-none overflow-y-auto pb-4 pr-1">
+            
+            <div class="apple-card p-5">
+                <h2 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold">1</span>
+                    فایل‌های زمینه (Context)
+                </h2>
+                <div class="drop-zone rounded-xl p-6 text-center cursor-pointer relative bg-slate-50/50 group" onclick="document.getElementById('file-input').click()">
+                    <input type="file" id="file-input" multiple accept=".pdf,.txt,.srt,.vtt,.epub" class="hidden" onchange="window.handleFileSelect(event)">
+                    <svg class="w-8 h-8 mx-auto text-slate-300 group-hover:text-blue-500 transition-colors mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <span class="text-xs font-bold text-blue-600">انتخاب فایل‌ها (PDF/TXT)</span>
+                </div>
+                <div id="file-list" class="mt-3 space-y-2"></div>
+            </div>
+
+            <div class="apple-card p-5">
+                <h2 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs font-bold">2</span>
+                    تصاویر فرمول (Target)
+                </h2>
+                <div class="text-xs text-slate-400 mb-2">حداکثر ۱۰ تصویر همزمان</div>
+                <div class="drop-zone rounded-xl p-6 text-center cursor-pointer relative bg-slate-50/50 group" onclick="document.getElementById('image-input').click()">
+                    <input type="file" id="image-input" multiple accept="image/*" class="hidden" onchange="window.handleImageSelect(event)">
+                    <svg class="w-8 h-8 mx-auto text-slate-300 group-hover:text-indigo-500 transition-colors mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    <span class="text-xs font-bold text-indigo-600">انتخاب تصاویر</span>
+                </div>
+                <div id="image-preview-container" class="mt-3 grid grid-cols-4 gap-2"></div>
+            </div>
+
+            <button onclick="window.processFilesAndImages()" id="process-btn" class="apple-card bg-slate-900 hover:bg-black text-white p-4 font-bold text-sm shadow-xl hover:shadow-2xl transition-all flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed group">
+                <svg class="w-5 h-5 text-indigo-400 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                <span id="btn-text">شروع تحلیل هوشمند</span>
+                <div id="loader" class="hidden w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            </button>
+
+            <div class="apple-card p-5 flex-1 flex flex-col min-h-[200px]">
+                <h2 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+                    <span class="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs font-bold">3</span>
+                    کتابخانه تحلیل‌ها
+                </h2>
+                <div class="relative mb-3">
+                    <input type="text" id="search-db" oninput="window.filterSavedItems(this.value)" placeholder="جستجو در تحلیل‌های ذخیره شده..." class="w-full bg-slate-100 border-none rounded-lg text-xs py-2 px-3 focus:ring-2 focus:ring-emerald-500/20 outline-none">
+                    <svg class="w-4 h-4 text-slate-400 absolute left-2 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+                <div id="saved-list" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    <div class="text-center text-xs text-slate-400 py-4">در حال بارگیری...</div>
+                </div>
+            </div>
+        </aside>
+
+        <section class="flex-1 h-full relative apple-card overflow-hidden flex flex-col bg-white border-0 shadow-sm">
+            <div class="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 z-10"></div>
+            
+            <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-sm z-10">
+                <div class="flex flex-col">
+                    <h2 class="font-bold text-slate-800 text-lg">نتایج تحلیل و بازسازی</h2>
+                    <span id="analysis-title" class="text-xs text-indigo-600 font-medium h-4 block"></span>
+                </div>
+                <span class="text-[10px] font-bold bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full" id="status-indicator">منتظر ورودی...</span>
+            </div>
+
+            <div id="results-container" class="flex-1 overflow-y-auto p-8 space-y-10 scroll-smooth pb-32">
+                <div id="empty-state" class="h-full flex flex-col items-center justify-center text-slate-300 select-none">
+                    <div class="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                        <svg class="w-10 h-10 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    </div>
+                    <p class="text-lg font-medium text-slate-400">هنوز داده‌ای پردازش نشده است</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="overlay" onclick="window.closeAllPopups()"></div>
+
+    <div id="origin-popup" class="modal bg-white rounded-2xl shadow-2xl border border-gray-100 p-0 w-[420px] max-w-[90%] overflow-hidden">
+        <div class="bg-slate-50 px-5 py-4 border-b border-gray-200 flex justify-between items-center">
+            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">ریشه متغیر (Context Trace)</h3>
+            <button onclick="window.closeAllPopups()" class="text-slate-400 hover:text-red-500 transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+        </div>
+        <div class="p-8 text-center">
+            <div id="popup-math" class="text-2xl mb-6 text-blue-700 overflow-x-auto py-2 px-2 dir-ltr"></div>
+            <p id="popup-desc" class="text-sm text-slate-600 leading-relaxed"></p>
+        </div>
+    </div>
+
+    <div id="chart-popup" class="modal bg-white rounded-3xl shadow-2xl border border-gray-100 p-0 w-[1000px] h-[650px] max-w-[95%] max-h-[90%] flex flex-col">
+        <div class="px-8 py-6 border-b border-gray-100 flex justify-between items-start">
+            <div class="flex-1">
+                <h3 class="text-xl font-bold text-slate-800 mb-2">تصویرسازی تعاملی داده‌ها</h3>
+                <div id="chart-subtitle" class="text-sm text-slate-500"></div>
+            </div>
+            <button onclick="window.closeAllPopups()" class="bg-slate-100 hover:bg-slate-200 p-2.5 rounded-full transition-colors ml-4">
+                <svg class="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <div class="flex-1 bg-slate-50/50 p-8 relative">
+             <div class="absolute inset-8 bg-white rounded-2xl border border-gray-200 shadow-sm p-4 flex flex-col justify-center">
+                <canvas id="vizCanvas"></canvas>
+                <div id="chartjs-tooltip"></div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+        import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // --- Firebase Config ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAaLqofvPVzxmWAMNBY33MZvPO_ojc18Jc",
+            authDomain: "formula-41442.firebaseapp.com",
+            databaseURL: "https://formula-41442-default-rtdb.firebaseio.com",
+            projectId: "formula-41442",
+            storageBucket: "formula-41442.firebasestorage.app",
+            messagingSenderId: "720912992064",
+            appId: "1:720912992064:web:ad6d88f7a81d0c57369ca5",
+            measurementId: "G-ZK2X7BPVLD"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const db = getDatabase(app);
+
+        // --- Global State ---
+        window.USER_API_KEY = '';
+        let EXTRACTED_CONTEXT_TEXT = ''; 
+        let UPLOADED_IMAGES = []; 
+        let FORMULA_DATA_MAP = {}; 
+        let CURRENT_ANALYSIS_TITLE = "";
+        let SAVED_ITEMS_CACHE = [];
+        let currentChartInstance = null;
+
+        // --- Initialize: Load Saved Items ---
+        const dbRef = ref(db, 'analyses');
+        onValue(dbRef, (snapshot) => {
+            const data = snapshot.val();
+            const listContainer = document.getElementById('saved-list');
+            listContainer.innerHTML = '';
+            SAVED_ITEMS_CACHE = [];
+
+            if (!data) {
+                listContainer.innerHTML = '<div class="text-center text-xs text-slate-300 py-4">موردی یافت نشد</div>';
+                return;
+            }
+
+            // Convert object to array and reverse (newest first)
+            const items = Object.entries(data).map(([key, value]) => ({ id: key, ...value })).reverse();
+            SAVED_ITEMS_CACHE = items;
+            renderSavedList(items);
+        });
+
+        // --- Helpers for Saved List ---
+        function renderSavedList(items) {
+            const listContainer = document.getElementById('saved-list');
+            listContainer.innerHTML = '';
+            
+            items.forEach(item => {
+                const el = document.createElement('div');
+                el.className = "saved-item p-3 rounded-lg border border-slate-100 bg-white mb-2 flex flex-col gap-1";
+                el.onclick = () => loadAnalysisFromDb(item);
+                
+                el.innerHTML = `
+                    <div class="font-bold text-slate-700 text-xs truncate">${item.title || 'بدون عنوان'}</div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-[10px] text-slate-400">${new Date(item.timestamp).toLocaleDateString('fa-IR')}</span>
+                        <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 rounded">${item.data.length} فرمول</span>
+                    </div>
+                `;
+                listContainer.appendChild(el);
+            });
+        }
+
+        window.filterSavedItems = function(query) {
+            const filtered = SAVED_ITEMS_CACHE.filter(item => 
+                (item.title && item.title.includes(query))
+            );
+            renderSavedList(filtered);
+        }
+
+        function loadAnalysisFromDb(item) {
+            CURRENT_ANALYSIS_TITLE = item.title;
+            document.getElementById('analysis-title').textContent = item.title;
+            document.getElementById('btn-save-cloud').classList.add('hidden'); // Already saved
+            renderResults(item.data);
+            alert(`تحلیل "${item.title}" بارگذاری شد.`);
+        }
+
+        // --- PDF Reader ---
+        async function readPdf(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullText = "";
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                const pageText = textContent.items.map(item => item.str).join(" ");
+                fullText += `--- Page ${i} ---\n${pageText}\n`;
+            }
+            return fullText;
+        }
+
+        // --- Handlers ---
+        window.handleFileSelect = async function(event) {
+            const files = Array.from(event.target.files).slice(0, 5);
+            const list = document.getElementById('file-list');
+            list.innerHTML = '';
+            EXTRACTED_CONTEXT_TEXT = '';
+
+            for (const file of files) {
+                const item = document.createElement('div');
+                item.className = "flex items-center gap-3 text-xs bg-white p-3 rounded-lg border border-gray-200 shadow-sm";
+                item.innerHTML = `<span class="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded uppercase">${file.name.split('.').pop()}</span> <span class="truncate max-w-[180px] font-medium text-slate-700">${file.name}</span>`;
+                list.appendChild(item);
+
+                try {
+                    let text = file.type === "application/pdf" ? await readPdf(file) : await file.text();
+                    EXTRACTED_CONTEXT_TEXT += `\n=== FILE: ${file.name} ===\n${text}\n`;
+                } catch (e) {
+                    item.classList.add('border-red-300', 'bg-red-50');
+                    item.innerHTML += `<span class="text-red-500 ml-auto font-bold">خطا</span>`;
+                }
+            }
+        }
+
+        window.handleImageSelect = function(event) {
+            // Updated limit: 10 images
+            const files = Array.from(event.target.files).slice(0, 10);
+            const container = document.getElementById('image-preview-container');
+            container.innerHTML = '';
+            UPLOADED_IMAGES = [];
+
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const base64 = e.target.result;
+                    UPLOADED_IMAGES.push({ inlineData: { data: base64.split(',')[1], mimeType: file.type } });
+                    const img = document.createElement('div');
+                    img.className = "aspect-square rounded-xl bg-slate-100 border border-slate-200 bg-cover bg-center shadow-sm";
+                    img.style.backgroundImage = `url(${base64})`;
+                    container.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        window.setApiKey = function() {
+            const input = document.getElementById('api-key');
+            const status = document.getElementById('connection-status');
+            if(input.value.trim().length > 5) {
+                window.USER_API_KEY = input.value.trim();
+                status.textContent = "✓ ارتباط امن برقرار شد";
+                status.style.opacity = '1';
+                setTimeout(() => status.style.opacity = '0', 3000);
+            } else { alert("کلید API نامعتبر است"); }
+        }
+
+        // --- Save to Firebase ---
+        window.saveToFirebase = function() {
+            if (Object.keys(FORMULA_DATA_MAP).length === 0) return alert("داده‌ای برای ذخیره وجود ندارد.");
+            if (!CURRENT_ANALYSIS_TITLE) CURRENT_ANALYSIS_TITLE = "تحلیل بدون عنوان";
+
+            const payload = {
+                title: CURRENT_ANALYSIS_TITLE,
+                timestamp: Date.now(),
+                data: Object.values(FORMULA_DATA_MAP)
+            };
+
+            push(ref(db, 'analyses'), payload)
+                .then(() => {
+                    alert("تحلیل با موفقیت در فضای ابری ذخیره شد.");
+                    document.getElementById('btn-save-cloud').classList.add('hidden');
+                })
+                .catch((error) => {
+                    alert("خطا در ذخیره سازی: " + error.message);
+                });
+        }
+
+        // --- Core Process ---
+        window.processFilesAndImages = async function() {
+            if (!window.USER_API_KEY) return alert("لطفا کلید API را وارد کنید.");
+            if (UPLOADED_IMAGES.length === 0) return alert("لطفا حداقل یک تصویر فرمول آپلود کنید.");
+
+            const btnText = document.getElementById('btn-text');
+            const loader = document.getElementById('loader');
+            const status = document.getElementById('status-indicator');
+            const emptyState = document.getElementById('empty-state');
+            const resultsContainer = document.getElementById('results-container');
+            const saveBtn = document.getElementById('btn-save-cloud');
+
+            btnText.textContent = "در حال پردازش...";
+            loader.classList.remove('hidden');
+            document.getElementById('process-btn').disabled = true;
+            status.textContent = "تحلیل هوشمند محتوا...";
+            status.className = "text-[10px] font-bold bg-blue-100 text-blue-600 px-3 py-1.5 rounded-full animate-pulse";
+            emptyState.classList.add('hidden');
+            saveBtn.classList.add('hidden'); // Hide until finished
+            document.getElementById('analysis-title').textContent = '';
+            
+            // Clear previous UI
+            Array.from(resultsContainer.children).forEach(child => {
+                if (child.id !== 'empty-state') child.remove();
+            });
+
+            try {
+                const response = await callGemini();
+                
+                // Handle new structure { title: "...", analysis: [...] }
+                CURRENT_ANALYSIS_TITLE = response.title || "تحلیل جدید";
+                document.getElementById('analysis-title').textContent = CURRENT_ANALYSIS_TITLE;
+                
+                renderResults(response.analysis);
+                
+                status.textContent = "تحلیل کامل شد";
+                status.className = "text-[10px] font-bold bg-emerald-100 text-emerald-600 px-3 py-1.5 rounded-full";
+                saveBtn.classList.remove('hidden'); // Show save button
+
+            } catch (error) {
+                console.error(error);
+                alert("خطا: " + error.message);
+                status.textContent = "خطا در پردازش";
+                status.className = "text-[10px] font-bold bg-red-100 text-red-600 px-3 py-1.5 rounded-full";
+            } finally {
+                btnText.textContent = "شروع تحلیل هوشمند";
+                loader.classList.add('hidden');
+                document.getElementById('process-btn').disabled = false;
+            }
+        }
+
+        async function callGemini() {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.USER_API_KEY}`;
+            
+            // UPDATED PROMPT: Requesting a Title and handling multiple images context
+            const textPrompt = `
+            You are an expert Mathematical Architect.
+            
+            CONTEXT FILES:
+            """${EXTRACTED_CONTEXT_TEXT.substring(0, 40000)}"""
+
+            TASK:
+            1. Extract formulas from ALL provided images.
+            2. ALIGN with CONTEXT: Understand what the variables represent physically/economically.
+            3. **TITLE GENERATION**: Create a short, professional Persian title for this set of formulas based on their mathematical/scientific content (e.g. "تحلیل توابع عرضه و تقاضا").
+            
+            4. **CONTEXTUAL VISUALIZATION**: 
+               - Does the formula describe a relationship suitable for a 2D plot?
+               - IF YES: Generate 'chart_data' with 20 points based on realistic ranges from context.
+
+            FORMATTING RULES:
+            - **Inline Math**: Enclose ALL math variables in backticks (\`).
+            - **Strict Latex**: Inside backticks, use valid Katex.
+            - **Persian**: Descriptions must be in Persian.
+
+            OUTPUT JSON STRUCTURE:
+            {
+              "title": "Persian Title Here",
+              "analysis": [
+                  {
+                    "id": "f1",
+                    "latex": "Raw Latex",
+                    "description": "Persian text with \`math\` chips.",
+                    "context_match_found": boolean,
+                    "visualizable": boolean, 
+                    "chart_data": {
+                        "type": "line",
+                        "labels": [x1, x2...], 
+                        "dataset_label": "Persian Label",
+                        "data": [y1, y2...]
+                    }
+                  }
+              ]
+            }
+            `;
+
+            // Combine text prompt with ALL uploaded images
+            const parts = [{ text: textPrompt }, ...UPLOADED_IMAGES];
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: parts }] })
+            });
+
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+            if (!data.candidates) throw new Error("No response from AI");
+
+            const rawText = data.candidates[0].content.parts[0].text;
+            const jsonString = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+            return JSON.parse(jsonString);
+        }
+
+        // --- Rendering Engine ---
+        function formatPersianText(text) {
+            if (!text) return '';
+            return text.replace(/`([^`]+)`/g, (match, mathContent) => {
+                try {
+                    const rendered = katex.renderToString(mathContent, { 
+                        throwOnError: false, 
+                        displayMode: false 
+                    });
+                    return `<span class="math-code" dir="ltr">${rendered}</span>`;
+                } catch (e) { 
+                    return `<span class="math-code" dir="ltr">${mathContent}</span>`; 
+                }
+            });
+        }
+
+        function renderResults(formulas) {
+            const container = document.getElementById('results-container');
+            const emptyState = document.getElementById('empty-state');
+            if(emptyState) emptyState.classList.add('hidden');
+            
+            container.innerHTML = '';
+            FORMULA_DATA_MAP = {};
+
+            if(!formulas || formulas.length === 0) return;
+
+            formulas.forEach((item, index) => {
+                FORMULA_DATA_MAP[item.id] = item;
+                
+                const card = document.createElement('div');
+                card.className = "relative pl-8 pb-10 border-l-2 border-slate-200 last:border-0 hover:border-blue-300 transition-colors";
+                
+                const dot = document.createElement('div');
+                dot.className = `absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white ${item.context_match_found ? 'bg-emerald-500 shadow-lg shadow-emerald-200' : 'bg-blue-500 shadow-lg shadow-blue-200'}`;
+                
+                const contentBox = document.createElement('div');
+                contentBox.className = "bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300";
+
+                let badges = `<div class="flex flex-wrap gap-2 mb-4">`;
+                badges += `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-slate-100 text-slate-500 border border-slate-200">فرمول ${index + 1}</span>`;
+                if(item.context_match_found) badges += `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1">✓ تایید شده با متن</span>`;
+                badges += `</div>`;
+
+                const desc = `<p class="text-sm text-slate-600 mb-5 leading-8 text-justify">${formatPersianText(item.description)}</p>`;
+
+                const mathWrapper = document.createElement('div');
+                mathWrapper.className = "bg-slate-50 rounded-xl border border-dashed border-slate-300 p-6 text-center text-xl md:text-2xl overflow-x-auto mb-5 dir-ltr";
+                mathWrapper.style.direction = 'ltr';
+                mathWrapper.style.unicodeBidi = 'isolate';
+                
+                try {
+                    katex.render(item.latex, mathWrapper, { throwOnError: false, displayMode: true });
+                } catch(e) { mathWrapper.textContent = item.latex; }
+
+                let actions = '';
+                if(item.visualizable && item.chart_data) {
+                    actions = `
+                    <div class="flex justify-end pt-4 border-t border-slate-100">
+                        <button onclick="window.openChart('${item.id}')" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-md hover:shadow-indigo-500/30 text-xs font-bold transform active:scale-95">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+                            رسم نمودار تعاملی
+                        </button>
+                    </div>`;
+                }
+
+                contentBox.innerHTML = badges + desc;
+                contentBox.appendChild(mathWrapper);
+                if(actions) contentBox.insertAdjacentHTML('beforeend', actions);
+                
+                card.appendChild(dot);
+                card.appendChild(contentBox);
+                container.appendChild(card);
+            });
+        }
+
+        // --- Visualization & Popups ---
+        window.openChart = function(id) {
+            const data = FORMULA_DATA_MAP[id];
+            if(!data || !data.chart_data) return;
+
+            const popup = document.getElementById('chart-popup');
+            const overlay = document.getElementById('overlay');
+            const ctx = document.getElementById('vizCanvas').getContext('2d');
+            const titleEl = document.getElementById('chart-subtitle');
+
+            const displayLatex = data.latex.includes('`') ? data.latex : '`' + data.latex + '`';
+            titleEl.innerHTML = formatPersianText(`تحلیل رفتار: ${displayLatex}`);
+
+            if (currentChartInstance) currentChartInstance.destroy();
+
+            currentChartInstance = new Chart(ctx, {
+                type: data.chart_data.type || 'line',
+                data: {
+                    labels: data.chart_data.labels,
+                    datasets: [{
+                        label: data.chart_data.dataset_label, 
+                        data: data.chart_data.data,
+                        borderColor: '#4f46e5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#4f46e5',
+                        pointRadius: 6,
+                        pointHoverRadius: 9,
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            enabled: false,
+                            external: (context) => {
+                                const tooltipEl = document.getElementById('chartjs-tooltip');
+                                const tooltipModel = context.tooltip;
+                                if(tooltipModel.opacity === 0) { tooltipEl.style.opacity = 0; return; }
+                                
+                                if(tooltipModel.body) {
+                                    const rawDatasetLabel = data.chart_data.dataset_label;
+                                    let innerHtml = `<div class="border-b pb-2 mb-2 border-gray-200 text-xs text-gray-500 font-bold">
+                                        ${formatPersianText(rawDatasetLabel)}
+                                    </div>`;
+                                    
+                                    tooltipModel.body.map(b => b.lines).forEach((b, i) => {
+                                        const value = context.tooltip.dataPoints[i].formattedValue;
+                                        innerHtml += `<div class="font-mono text-indigo-600 text-lg font-bold dir-ltr text-left">${value}</div>`;
+                                    });
+                                    
+                                    tooltipEl.innerHTML = innerHtml;
+                                }
+                                
+                                tooltipEl.style.opacity = 1;
+                                tooltipEl.style.left = tooltipModel.caretX + 'px';
+                                tooltipEl.style.top = tooltipModel.caretY + 'px';
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            grid: { color: '#f1f5f9', borderDash: [5, 5] }, 
+                            border: { display: false },
+                            ticks: { font: { family: 'Inter' } } 
+                        },
+                        x: { 
+                            grid: { display: false }, 
+                            border: { display: false }, 
+                            ticks: { font: { family: 'Inter' } } 
+                        }
+                    }
+                }
+            });
+
+            overlay.style.display = 'block';
+            popup.style.display = 'flex';
+        }
+
+        window.closeAllPopups = function() {
+            document.getElementById('origin-popup').style.display = 'none';
+            document.getElementById('chart-popup').style.display = 'none';
+            document.getElementById('overlay').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
