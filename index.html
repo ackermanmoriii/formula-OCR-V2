@@ -194,7 +194,7 @@
             <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-sm z-10">
                 <div class="flex flex-col flex-1 pl-4">
                     <h2 class="font-bold text-slate-800 text-lg">نتایج تحلیل و بازسازی</h2>
-                    <input type="text" id="analysis-title-input" class="bg-transparent border-b border-dashed border-indigo-300 focus:border-indigo-600 outline-none text-xs text-indigo-600 font-medium w-full placeholder-indigo-300 mt-1 transition-colors" placeholder="عنوان تحلیل (پس از تحلیل اینجا ظاهر می‌شود و قابل ویرایش است)">
+                    <input type="text" id="analysis-title-input" class="bg-transparent border-b border-dashed border-indigo-300 focus:border-indigo-600 outline-none text-xs text-indigo-600 font-medium w-full placeholder-indigo-300 mt-1 transition-colors" placeholder="عنوان تحلیل (پس از تحلیل اینجا ظاهر می‌شود)">
                 </div>
                 <span class="text-[10px] font-bold bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full whitespace-nowrap" id="status-indicator">منتظر ورودی...</span>
             </div>
@@ -211,17 +211,6 @@
     </main>
 
     <div id="overlay" onclick="window.closeAllPopups()"></div>
-
-    <div id="origin-popup" class="modal bg-white rounded-2xl shadow-2xl border border-gray-100 p-0 w-[420px] max-w-[90%] overflow-hidden">
-        <div class="bg-slate-50 px-5 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-wider">ریشه متغیر (Context Trace)</h3>
-            <button onclick="window.closeAllPopups()" class="text-slate-400 hover:text-red-500 transition-colors"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
-        </div>
-        <div class="p-8 text-center">
-            <div id="popup-math" class="text-2xl mb-6 text-blue-700 overflow-x-auto py-2 px-2 dir-ltr"></div>
-            <p id="popup-desc" class="text-sm text-slate-600 leading-relaxed"></p>
-        </div>
-    </div>
 
     <div id="chart-popup" class="modal bg-white rounded-3xl shadow-2xl border border-gray-100 p-0 w-[1000px] h-[650px] max-w-[95%] max-h-[90%] flex flex-col">
         <div class="px-8 py-6 border-b border-gray-100 flex justify-between items-start">
@@ -265,7 +254,7 @@
 
         // --- Global State ---
         window.USER_API_KEY = '';
-        window.CURRENT_USERNAME = ''; // NEW STATE
+        window.CURRENT_USERNAME = ''; 
         let EXTRACTED_CONTEXT_TEXT = ''; 
         let UPLOADED_IMAGES = []; 
         let FORMULA_DATA_MAP = {}; 
@@ -273,7 +262,7 @@
         let currentChartInstance = null;
         let activeDbListener = null;
 
-        // --- Connection Logic (NEW) ---
+        // --- Connection Logic ---
         window.connectUser = function() {
             const apiInput = document.getElementById('api-key');
             const userInput = document.getElementById('username-input');
@@ -285,7 +274,7 @@
             if(userInput.value.trim().length < 2) return alert("نام کاربری باید حداقل ۲ حرف باشد");
 
             window.USER_API_KEY = apiInput.value.trim();
-            window.CURRENT_USERNAME = userInput.value.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); // Sanitize username
+            window.CURRENT_USERNAME = userInput.value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
             // UI Feedback
             status.textContent = "✓ متصل شد: " + window.CURRENT_USERNAME;
@@ -294,15 +283,10 @@
             userDisplay.textContent = `کاربر: ${window.CURRENT_USERNAME}`;
             userDisplay.classList.remove('hidden');
 
-            // --- Database Listener for Specific User ---
-            if(activeDbListener) {
-                // Remove old listener if exists
-                off(activeDbListener);
-            }
+            // --- Database Listener ---
+            if(activeDbListener) off(activeDbListener);
 
-            // Path: users/{username}/analyses
             const userDbRef = ref(db, `users/${window.CURRENT_USERNAME}/analyses`);
-            
             listContainer.innerHTML = '<div class="text-center text-xs text-slate-400 py-4">در حال جستجو...</div>';
 
             activeDbListener = onValue(userDbRef, (snapshot) => {
@@ -351,18 +335,16 @@
         }
 
         function loadAnalysisFromDb(item) {
-            // Fill title input with saved title
             document.getElementById('analysis-title-input').value = item.title;
             document.getElementById('btn-save-cloud').classList.add('hidden'); 
             renderResults(item.data);
         }
 
-        // --- Save to Firebase (Updated) ---
+        // --- Save to Firebase ---
         window.saveToFirebase = function() {
             if (!window.CURRENT_USERNAME) return alert("لطفا ابتدا متصل شوید.");
             if (Object.keys(FORMULA_DATA_MAP).length === 0) return alert("داده‌ای برای ذخیره وجود ندارد.");
             
-            // Read from the input field
             const titleInput = document.getElementById('analysis-title-input');
             const finalTitle = titleInput.value.trim() || "تحلیل بدون عنوان";
 
@@ -372,7 +354,6 @@
                 data: Object.values(FORMULA_DATA_MAP)
             };
 
-            // Save to users/{username}/analyses
             push(ref(db, `users/${window.CURRENT_USERNAME}/analyses`), payload)
                 .then(() => {
                     alert("تحلیل با موفقیت ذخیره شد.");
@@ -383,8 +364,7 @@
                 });
         }
 
-        // --- Handlers (File/Image) ---
-        // Same as before but ensuring window scope
+        // --- File Helpers ---
         async function readPdf(file) {
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -465,10 +445,7 @@
 
             try {
                 const response = await callGemini();
-                
-                // Set the suggested title in the input for editing
                 titleInput.value = response.title || "تحلیل جدید";
-                
                 renderResults(response.analysis);
                 status.textContent = "تحلیل کامل شد";
                 status.className = "text-[10px] font-bold bg-emerald-100 text-emerald-600 px-3 py-1.5 rounded-full";
@@ -488,16 +465,37 @@
 
         async function callGemini() {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.USER_API_KEY}`;
+            
+            // STRONG PROMPT to force Persian and Clean LaTeX
             const textPrompt = `
-            You are an expert Mathematical Architect.
+            CRITICAL INSTRUCTIONS:
+            1. **LANGUAGE IS STRICTLY PERSIAN (FARSI)**: The context files might be in English, but your OUTPUT EXPLANATIONS MUST BE IN FLUENT PERSIAN. Do NOT output English descriptions.
+            2. **LATEX FORMAT**: Return PURE Latex strings for the formula. Do not enclose them in '$$', '\\[', or markdown blocks inside the JSON value. Just the latex code.
+
             CONTEXT FILES: """${EXTRACTED_CONTEXT_TEXT.substring(0, 40000)}"""
+
             TASK:
             1. Extract formulas from ALL provided images.
             2. ALIGN with CONTEXT.
-            3. **TITLE**: Generate a professional Persian title.
+            3. **TITLE**: Generate a creative Persian title.
             4. **VISUALIZATION**: Generate 20 data points if applicable.
-            OUTPUT JSON: { "title": "Persian Title", "analysis": [ ... ] }
+
+            OUTPUT JSON STRUCTURE: 
+            { 
+                "title": "عنوان فارسی", 
+                "analysis": [ 
+                    { 
+                        "id": "f1", 
+                        "latex": "x^2 + y^2", 
+                        "description": "توضیح کامل به زبان فارسی...", 
+                        "context_match_found": true, 
+                        "visualizable": true,
+                        "chart_data": { ... } 
+                    } 
+                ] 
+            }
             `;
+            
             const parts = [{ text: textPrompt }, ...UPLOADED_IMAGES];
             const response = await fetch(url, {
                 method: 'POST',
@@ -510,11 +508,22 @@
             return JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
         }
 
+        // Helper to clean potential markdown from Latex strings
+        function cleanLatex(latex) {
+            if (!latex) return "";
+            return latex
+                .replace(/^\\\[/, '') // Remove starting \[
+                .replace(/\\\]$/, '') // Remove ending \]
+                .replace(/^\$\$/, '') // Remove starting $$
+                .replace(/\$\$$/, '') // Remove ending $$
+                .trim();
+        }
+
         function formatPersianText(text) {
             if (!text) return '';
             return text.replace(/`([^`]+)`/g, (match, mathContent) => {
                 try {
-                    const rendered = katex.renderToString(mathContent, { throwOnError: false, displayMode: false });
+                    const rendered = katex.renderToString(cleanLatex(mathContent), { throwOnError: false, displayMode: false });
                     return `<span class="math-code" dir="ltr">${rendered}</span>`;
                 } catch (e) { return `<span class="math-code" dir="ltr">${mathContent}</span>`; }
             });
@@ -533,8 +542,10 @@
                 FORMULA_DATA_MAP[item.id] = item;
                 const card = document.createElement('div');
                 card.className = "relative pl-8 pb-10 border-l-2 border-slate-200 last:border-0 hover:border-blue-300 transition-colors";
+                
                 const dot = document.createElement('div');
                 dot.className = `absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white ${item.context_match_found ? 'bg-emerald-500 shadow-lg shadow-emerald-200' : 'bg-blue-500 shadow-lg shadow-blue-200'}`;
+                
                 const contentBox = document.createElement('div');
                 contentBox.className = "bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300";
                 
@@ -545,11 +556,19 @@
                 
                 const desc = `<p class="text-sm text-slate-600 mb-5 leading-8 text-justify">${formatPersianText(item.description)}</p>`;
                 
+                // MATH RENDER FIX:
                 const mathWrapper = document.createElement('div');
-                mathWrapper.className = "bg-slate-50 rounded-xl border border-dashed border-slate-300 p-6 text-center text-xl md:text-2xl overflow-x-auto mb-5 dir-ltr";
+                mathWrapper.className = "bg-slate-50 rounded-xl border border-dashed border-slate-300 p-6 text-center text-xl md:text-2xl overflow-x-auto mb-5 dir-ltr text-slate-800";
                 mathWrapper.style.direction = 'ltr'; 
-                try { katex.render(item.latex, mathWrapper, { throwOnError: false, displayMode: true }); } 
-                catch(e) { mathWrapper.textContent = item.latex; }
+                
+                const cleanedLatex = cleanLatex(item.latex);
+                
+                try { 
+                    katex.render(cleanedLatex, mathWrapper, { throwOnError: false, displayMode: true }); 
+                } catch(e) { 
+                    // Fallback if render fails: show raw text
+                    mathWrapper.textContent = cleanedLatex || "خطا در نمایش فرمول"; 
+                }
 
                 let actions = '';
                 if(item.visualizable && item.chart_data) {
@@ -573,8 +592,8 @@
             const ctx = document.getElementById('vizCanvas').getContext('2d');
             const titleEl = document.getElementById('chart-subtitle');
             
-            const displayLatex = data.latex.includes('`') ? data.latex : '`' + data.latex + '`';
-            titleEl.innerHTML = formatPersianText(`تحلیل رفتار: ${displayLatex}`);
+            const displayLatex = cleanLatex(data.latex);
+            titleEl.innerHTML = formatPersianText(`تحلیل رفتار: \`${displayLatex}\``);
             
             if (currentChartInstance) currentChartInstance.destroy();
             currentChartInstance = new Chart(ctx, {
@@ -604,7 +623,7 @@
             });
             overlay.style.display = 'block'; popup.style.display = 'flex';
         }
-        window.closeAllPopups = function() { document.getElementById('origin-popup').style.display = 'none'; document.getElementById('chart-popup').style.display = 'none'; document.getElementById('overlay').style.display = 'none'; }
+        window.closeAllPopups = function() { document.getElementById('chart-popup').style.display = 'none'; document.getElementById('overlay').style.display = 'none'; }
     </script>
 </body>
 </html>
