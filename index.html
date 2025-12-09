@@ -13,7 +13,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
 
     <style>
         body { font-family: 'Vazirmatn', 'Inter', sans-serif; background-color: #f5f5f7; color: #1d1d1f; }
@@ -24,29 +25,33 @@
         /* Typography & Markdown Styles */
         .markdown-body {
             font-size: 0.95rem;
-            line-height: 1.8;
+            line-height: 2.2; /* Increased line height for math readability */
             color: #334155;
         }
         .markdown-body strong { color: #0f172a; font-weight: 700; }
         .markdown-body ul { list-style-type: disc; padding-right: 1.5em; margin-bottom: 1em; }
-        .markdown-body p { margin-bottom: 0.8em; }
-        .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 700; color: #1e293b; margin-top: 1em; margin-bottom: 0.5em; }
+        .markdown-body p { margin-bottom: 0.8em; text-align: justify; }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 700; color: #1e293b; margin-top: 1.5em; margin-bottom: 0.75em; }
 
-        /* Strict LTR for Math */
-        .math-code {
+        /* Katex Adjustments for Persian Text */
+        .katex {
+            font-size: 1.15em !important; /* Make math slightly larger than text */
             direction: ltr !important;
             unicode-bidi: isolate;
-            display: inline-block;
-            margin: 0 2px;
-            vertical-align: middle;
+            font-family: 'JetBrains Mono', 'KaTeX_Main', serif;
         }
-        /* Display Math Block */
-        .math-display {
+        
+        /* Display Math Block Container */
+        .math-display-wrapper {
             direction: ltr !important;
-            display: block;
-            text-align: center;
-            margin: 1rem 0;
+            display: flex;
+            justify-content: center;
+            margin: 1.5rem 0;
             overflow-x: auto;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 12px;
+            border: 1px dashed #e2e8f0;
         }
 
         .glass-panel {
@@ -245,7 +250,6 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
         import { getDatabase, ref, push, onValue, off } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         // --- Firebase Config ---
@@ -256,8 +260,7 @@
             projectId: "formula-41442",
             storageBucket: "formula-41442.firebasestorage.app",
             messagingSenderId: "720912992064",
-            appId: "1:720912992064:web:ad6d88f7a81d0c57369ca5",
-            measurementId: "G-ZK2X7BPVLD"
+            appId: "1:720912992064:web:ad6d88f7a81d0c57369ca5"
         };
 
         const app = initializeApp(firebaseConfig);
@@ -307,22 +310,21 @@
                     return;
                 }
 
-                // Logic: Convert to array, assign ID based on chronological order (index+1), then reverse for display
                 const items = Object.entries(data).map(([key, value]) => ({ 
                     key: key, 
                     ...value 
                 }));
                 
-                // Sort chronologically first to assign stable IDs
+                // Sort chronologically for ID assignment
                 items.sort((a, b) => a.timestamp - b.timestamp);
                 
-                // Assign Sequential ID (1, 2, 3...)
+                // Assign Display ID
                 const numberedItems = items.map((item, index) => ({
                     ...item,
                     displayId: index + 1
                 }));
 
-                // Now reverse for display (Newest First)
+                // Reverse for display (Newest First)
                 SAVED_ITEMS_CACHE = numberedItems.reverse();
                 renderSavedList(SAVED_ITEMS_CACHE);
             });
@@ -368,7 +370,6 @@
             renderResults(item.data);
         }
 
-        // --- Save to Firebase ---
         window.saveToFirebase = function() {
             if (!window.CURRENT_USERNAME) return alert("لطفا ابتدا متصل شوید.");
             if (Object.keys(FORMULA_DATA_MAP).length === 0) return alert("داده‌ای برای ذخیره وجود ندارد.");
@@ -392,7 +393,7 @@
                 });
         }
 
-        // --- File & Image Handling ---
+        // --- File Handling ---
         async function readPdf(file) {
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -494,17 +495,15 @@
         async function callGemini() {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.USER_API_KEY}`;
             
-            // UPDATED PROMPT: Requesting Markdown + Strict LaTeX delimiters
             const textPrompt = `
             CRITICAL INSTRUCTIONS:
             1. **LANGUAGE IS STRICTLY PERSIAN (FARSI)**.
             2. **FORMATTING**:
-               - Use **Markdown** for text structuring (Bold, Lists, Headers).
+               - Use **Markdown** for text structuring (Bold, Lists).
                - **MATH FORMULAS**: 
-                 - For INLINE math, wrap strictly in single dollar signs: $ E = mc^2 $
-                 - For BLOCK math, wrap strictly in double dollar signs: $$ \\sum_{i=0}^n i^2 $$
-                 - **DO NOT** use \\( ... \\) or \\[ ... \\]. Use $ and $$.
-                 - Ensure variable names inside Persian text are wrapped in $ to look like math (e.g., $X$, $y_{new}$).
+                 - Inline math MUST use single dollar signs: $ E = mc^2 $
+                 - Block math MUST use double dollar signs: $$ \\sum $$
+                 - **Do NOT** use \\( ... \\) or [ ... ].
             
             CONTEXT FILES: """${EXTRACTED_CONTEXT_TEXT.substring(0, 40000)}"""
 
@@ -521,7 +520,7 @@
                     { 
                         "id": "f1", 
                         "latex": "x^2 + y^2", 
-                        "description": "Example: متغیر $x$ نشان‌دهنده **ورودی** است.", 
+                        "description": "Example: متغیر $x$ ورودی است.", 
                         "context_match_found": true, 
                         "visualizable": true,
                         "chart_data": { ... } 
@@ -547,42 +546,41 @@
             return latex.replace(/^\\\[/, '').replace(/\\\]$/, '').replace(/^\$\$/, '').replace(/\$\$/, '').trim();
         }
 
-        // --- NEW RENDERER: Markdown + Math ---
+        // --- IMPROVED RENDERER: Safe Placeholders ---
         function formatMarkdownWithMath(text) {
             if (!text) return '';
 
-            // 1. Tokenize Math to protect it from Markdown parser
-            // We search for $$...$$ and $...$
             const mathSegments = [];
             
-            // Protect Block Math $$...$$
+            // 1. Protect Block Math $$...$$ 
+            // USING SAFE STRING (No underscores)
             let protectedText = text.replace(/\$\$([\s\S]+?)\$\$/g, (match, math) => {
                 mathSegments.push({ type: 'display', math: math });
-                return `__MATH_BLOCK_${mathSegments.length - 1}__`;
+                return `ZBLOCKMATH${mathSegments.length - 1}ZBLOCKMATH`;
             });
 
-            // Protect Inline Math $...$
+            // 2. Protect Inline Math $...$
+            // USING SAFE STRING (No underscores)
             protectedText = protectedText.replace(/\$([^$]+?)\$/g, (match, math) => {
                 mathSegments.push({ type: 'inline', math: math });
-                return `__MATH_INLINE_${mathSegments.length - 1}__`;
+                return `ZINLINEMATH${mathSegments.length - 1}ZINLINEMATH`;
             });
 
-            // 2. Parse Markdown
+            // 3. Parse Markdown
+            // Marked.js won't touch 'ZINLINEMATH0ZINLINEMATH'
             let html = marked.parse(protectedText);
 
-            // 3. Restore Math and Render with Katex
-            html = html.replace(/__MATH_BLOCK_(\d+)__/g, (match, id) => {
-                const seg = mathSegments[id];
-                try {
-                    return katex.renderToString(seg.math, { displayMode: true, throwOnError: false });
-                } catch(e) { return seg.math; }
+            // 4. Restore and Render
+            // Restore Blocks
+            html = html.replace(/ZBLOCKMATH(\d+)ZBLOCKMATH/g, (match, id) => {
+                const seg = mathSegments[parseInt(id)];
+                return `<div class="math-display-wrapper">${katex.renderToString(seg.math, { displayMode: true, throwOnError: false })}</div>`;
             });
 
-            html = html.replace(/__MATH_INLINE_(\d+)__/g, (match, id) => {
-                const seg = mathSegments[id];
-                try {
-                    return katex.renderToString(seg.math, { displayMode: false, throwOnError: false });
-                } catch(e) { return seg.math; }
+            // Restore Inline
+            html = html.replace(/ZINLINEMATH(\d+)ZINLINEMATH/g, (match, id) => {
+                const seg = mathSegments[parseInt(id)];
+                return katex.renderToString(seg.math, { displayMode: false, throwOnError: false });
             });
 
             return html;
@@ -613,8 +611,8 @@
                 if(item.context_match_found) badges += `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1">✓ تایید شده با متن</span>`;
                 badges += `</div>`;
                 
-                // USE NEW RENDERER HERE
-                const desc = `<div class="markdown-body text-slate-600 mb-5 text-justify">${formatMarkdownWithMath(item.description)}</div>`;
+                // --- USE THE FIXED RENDERER ---
+                const desc = `<div class="markdown-body">${formatMarkdownWithMath(item.description)}</div>`;
                 
                 const mathWrapper = document.createElement('div');
                 mathWrapper.className = "bg-slate-50 rounded-xl border border-dashed border-slate-300 p-6 text-center text-xl md:text-2xl overflow-x-auto mb-5 dir-ltr text-slate-800";
@@ -647,9 +645,9 @@
             const ctx = document.getElementById('vizCanvas').getContext('2d');
             const titleEl = document.getElementById('chart-subtitle');
             
+            // Format title with math support
             const displayLatex = cleanLatex(data.latex);
-            // Use formatMarkdownWithMath here too for consistency if needed, but simple wrap is fine
-            titleEl.innerHTML = `تحلیل رفتار: <span class="math-code">${katex.renderToString(displayLatex, {throwOnError: false})}</span>`;
+            titleEl.innerHTML = `تحلیل رفتار: <span class="katex" style="direction:ltr; display:inline-block;">${katex.renderToString(displayLatex, {throwOnError: false})}</span>`;
             
             if (currentChartInstance) currentChartInstance.destroy();
             currentChartInstance = new Chart(ctx, {
