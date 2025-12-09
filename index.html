@@ -37,14 +37,6 @@
             font-family: 'JetBrains Mono', monospace;
         }
 
-        .variable-link {
-            color: #2563eb;
-            font-weight: 700;
-            cursor: pointer;
-            border-bottom: 1.5px dashed rgba(37, 99, 235, 0.4);
-        }
-        .variable-link:hover { color: #1e40af; background-color: rgba(37, 99, 235, 0.1); }
-
         .glass-panel {
             background: rgba(255, 255, 255, 0.9);
             backdrop-filter: blur(20px);
@@ -104,6 +96,7 @@
         }
         .saved-item:hover {
             background-color: #f8fafc;
+            border-color: #cbd5e1;
         }
     </style>
 </head>
@@ -129,10 +122,11 @@
 
                 <div class="flex items-center gap-2 mr-2 border-r border-gray-300 pr-4">
                     <div class="flex items-center gap-2 bg-white p-1 rounded-xl border border-gray-200 shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20">
-                        <button onclick="window.setApiKey()" class="bg-slate-900 hover:bg-black text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors">
+                        <button onclick="window.connectUser()" class="bg-slate-900 hover:bg-black text-white text-xs font-bold px-4 py-2 rounded-lg transition-colors">
                             اتصال
                         </button>
-                        <input type="password" id="api-key" dir="ltr" placeholder="Gemini API Key" class="bg-transparent outline-none px-2 py-1 text-sm w-48 text-slate-600">
+                        <input type="text" id="username-input" class="bg-transparent border-l border-gray-200 outline-none px-2 py-1 text-sm w-28 text-slate-600 text-center" placeholder="نام کاربری">
+                        <input type="password" id="api-key" dir="ltr" placeholder="Gemini API Key" class="bg-transparent outline-none px-2 py-1 text-sm w-36 text-slate-600">
                     </div>
                 </div>
             </div>
@@ -182,12 +176,14 @@
                     <span class="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs font-bold">3</span>
                     کتابخانه تحلیل‌ها
                 </h2>
+                <div id="user-display" class="hidden text-xs text-center mb-2 text-emerald-600 font-bold bg-emerald-50 py-1 rounded"></div>
+                
                 <div class="relative mb-3">
                     <input type="text" id="search-db" oninput="window.filterSavedItems(this.value)" placeholder="جستجو در تحلیل‌های ذخیره شده..." class="w-full bg-slate-100 border-none rounded-lg text-xs py-2 px-3 focus:ring-2 focus:ring-emerald-500/20 outline-none">
                     <svg class="w-4 h-4 text-slate-400 absolute left-2 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </div>
                 <div id="saved-list" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
-                    <div class="text-center text-xs text-slate-400 py-4">در حال بارگیری...</div>
+                    <div class="text-center text-xs text-slate-400 py-4">لطفا متصل شوید...</div>
                 </div>
             </div>
         </aside>
@@ -196,11 +192,11 @@
             <div class="absolute top-0 right-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 z-10"></div>
             
             <div class="p-5 border-b border-gray-100 flex justify-between items-center bg-white/80 backdrop-blur-sm z-10">
-                <div class="flex flex-col">
+                <div class="flex flex-col flex-1 pl-4">
                     <h2 class="font-bold text-slate-800 text-lg">نتایج تحلیل و بازسازی</h2>
-                    <span id="analysis-title" class="text-xs text-indigo-600 font-medium h-4 block"></span>
+                    <input type="text" id="analysis-title-input" class="bg-transparent border-b border-dashed border-indigo-300 focus:border-indigo-600 outline-none text-xs text-indigo-600 font-medium w-full placeholder-indigo-300 mt-1 transition-colors" placeholder="عنوان تحلیل (پس از تحلیل اینجا ظاهر می‌شود و قابل ویرایش است)">
                 </div>
-                <span class="text-[10px] font-bold bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full" id="status-indicator">منتظر ورودی...</span>
+                <span class="text-[10px] font-bold bg-slate-100 text-slate-500 px-3 py-1.5 rounded-full whitespace-nowrap" id="status-indicator">منتظر ورودی...</span>
             </div>
 
             <div id="results-container" class="flex-1 overflow-y-auto p-8 space-y-10 scroll-smooth pb-32">
@@ -249,7 +245,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
-        import { getDatabase, ref, push, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getDatabase, ref, push, onValue, off } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
         // --- Firebase Config ---
         const firebaseConfig = {
@@ -263,40 +259,69 @@
             measurementId: "G-ZK2X7BPVLD"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
         const db = getDatabase(app);
 
         // --- Global State ---
         window.USER_API_KEY = '';
+        window.CURRENT_USERNAME = ''; // NEW STATE
         let EXTRACTED_CONTEXT_TEXT = ''; 
         let UPLOADED_IMAGES = []; 
         let FORMULA_DATA_MAP = {}; 
-        let CURRENT_ANALYSIS_TITLE = "";
         let SAVED_ITEMS_CACHE = [];
         let currentChartInstance = null;
+        let activeDbListener = null;
 
-        // --- Initialize: Load Saved Items ---
-        const dbRef = ref(db, 'analyses');
-        onValue(dbRef, (snapshot) => {
-            const data = snapshot.val();
+        // --- Connection Logic (NEW) ---
+        window.connectUser = function() {
+            const apiInput = document.getElementById('api-key');
+            const userInput = document.getElementById('username-input');
+            const status = document.getElementById('connection-status');
+            const userDisplay = document.getElementById('user-display');
             const listContainer = document.getElementById('saved-list');
-            listContainer.innerHTML = '';
-            SAVED_ITEMS_CACHE = [];
 
-            if (!data) {
-                listContainer.innerHTML = '<div class="text-center text-xs text-slate-300 py-4">موردی یافت نشد</div>';
-                return;
+            if(apiInput.value.trim().length < 5) return alert("کلید API نامعتبر است");
+            if(userInput.value.trim().length < 2) return alert("نام کاربری باید حداقل ۲ حرف باشد");
+
+            window.USER_API_KEY = apiInput.value.trim();
+            window.CURRENT_USERNAME = userInput.value.trim().toLowerCase().replace(/[^a-z0-9]/g, ''); // Sanitize username
+
+            // UI Feedback
+            status.textContent = "✓ متصل شد: " + window.CURRENT_USERNAME;
+            status.style.opacity = '1';
+            
+            userDisplay.textContent = `کاربر: ${window.CURRENT_USERNAME}`;
+            userDisplay.classList.remove('hidden');
+
+            // --- Database Listener for Specific User ---
+            if(activeDbListener) {
+                // Remove old listener if exists
+                off(activeDbListener);
             }
 
-            // Convert object to array and reverse (newest first)
-            const items = Object.entries(data).map(([key, value]) => ({ id: key, ...value })).reverse();
-            SAVED_ITEMS_CACHE = items;
-            renderSavedList(items);
-        });
+            // Path: users/{username}/analyses
+            const userDbRef = ref(db, `users/${window.CURRENT_USERNAME}/analyses`);
+            
+            listContainer.innerHTML = '<div class="text-center text-xs text-slate-400 py-4">در حال جستجو...</div>';
 
-        // --- Helpers for Saved List ---
+            activeDbListener = onValue(userDbRef, (snapshot) => {
+                const data = snapshot.val();
+                SAVED_ITEMS_CACHE = [];
+
+                if (!data) {
+                    listContainer.innerHTML = '<div class="text-center text-xs text-slate-300 py-4">هنوز تحلیلی ذخیره نکرده‌اید</div>';
+                    return;
+                }
+
+                const items = Object.entries(data).map(([key, value]) => ({ id: key, ...value })).reverse();
+                SAVED_ITEMS_CACHE = items;
+                renderSavedList(items);
+            });
+            
+            setTimeout(() => status.style.opacity = '0', 3000);
+        }
+
         function renderSavedList(items) {
             const listContainer = document.getElementById('saved-list');
             listContainer.innerHTML = '';
@@ -318,6 +343,7 @@
         }
 
         window.filterSavedItems = function(query) {
+            if(!window.CURRENT_USERNAME) return;
             const filtered = SAVED_ITEMS_CACHE.filter(item => 
                 (item.title && item.title.includes(query))
             );
@@ -325,14 +351,40 @@
         }
 
         function loadAnalysisFromDb(item) {
-            CURRENT_ANALYSIS_TITLE = item.title;
-            document.getElementById('analysis-title').textContent = item.title;
-            document.getElementById('btn-save-cloud').classList.add('hidden'); // Already saved
+            // Fill title input with saved title
+            document.getElementById('analysis-title-input').value = item.title;
+            document.getElementById('btn-save-cloud').classList.add('hidden'); 
             renderResults(item.data);
-            alert(`تحلیل "${item.title}" بارگذاری شد.`);
         }
 
-        // --- PDF Reader ---
+        // --- Save to Firebase (Updated) ---
+        window.saveToFirebase = function() {
+            if (!window.CURRENT_USERNAME) return alert("لطفا ابتدا متصل شوید.");
+            if (Object.keys(FORMULA_DATA_MAP).length === 0) return alert("داده‌ای برای ذخیره وجود ندارد.");
+            
+            // Read from the input field
+            const titleInput = document.getElementById('analysis-title-input');
+            const finalTitle = titleInput.value.trim() || "تحلیل بدون عنوان";
+
+            const payload = {
+                title: finalTitle,
+                timestamp: Date.now(),
+                data: Object.values(FORMULA_DATA_MAP)
+            };
+
+            // Save to users/{username}/analyses
+            push(ref(db, `users/${window.CURRENT_USERNAME}/analyses`), payload)
+                .then(() => {
+                    alert("تحلیل با موفقیت ذخیره شد.");
+                    document.getElementById('btn-save-cloud').classList.add('hidden');
+                })
+                .catch((error) => {
+                    alert("خطا در ذخیره سازی: " + error.message);
+                });
+        }
+
+        // --- Handlers (File/Image) ---
+        // Same as before but ensuring window scope
         async function readPdf(file) {
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -346,19 +398,16 @@
             return fullText;
         }
 
-        // --- Handlers ---
         window.handleFileSelect = async function(event) {
             const files = Array.from(event.target.files).slice(0, 5);
             const list = document.getElementById('file-list');
             list.innerHTML = '';
             EXTRACTED_CONTEXT_TEXT = '';
-
             for (const file of files) {
                 const item = document.createElement('div');
                 item.className = "flex items-center gap-3 text-xs bg-white p-3 rounded-lg border border-gray-200 shadow-sm";
                 item.innerHTML = `<span class="font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded uppercase">${file.name.split('.').pop()}</span> <span class="truncate max-w-[180px] font-medium text-slate-700">${file.name}</span>`;
                 list.appendChild(item);
-
                 try {
                     let text = file.type === "application/pdf" ? await readPdf(file) : await file.text();
                     EXTRACTED_CONTEXT_TEXT += `\n=== FILE: ${file.name} ===\n${text}\n`;
@@ -370,12 +419,10 @@
         }
 
         window.handleImageSelect = function(event) {
-            // Updated limit: 10 images
             const files = Array.from(event.target.files).slice(0, 10);
             const container = document.getElementById('image-preview-container');
             container.innerHTML = '';
             UPLOADED_IMAGES = [];
-
             files.forEach(file => {
                 const reader = new FileReader();
                 reader.onload = (e) => {
@@ -390,41 +437,9 @@
             });
         }
 
-        window.setApiKey = function() {
-            const input = document.getElementById('api-key');
-            const status = document.getElementById('connection-status');
-            if(input.value.trim().length > 5) {
-                window.USER_API_KEY = input.value.trim();
-                status.textContent = "✓ ارتباط امن برقرار شد";
-                status.style.opacity = '1';
-                setTimeout(() => status.style.opacity = '0', 3000);
-            } else { alert("کلید API نامعتبر است"); }
-        }
-
-        // --- Save to Firebase ---
-        window.saveToFirebase = function() {
-            if (Object.keys(FORMULA_DATA_MAP).length === 0) return alert("داده‌ای برای ذخیره وجود ندارد.");
-            if (!CURRENT_ANALYSIS_TITLE) CURRENT_ANALYSIS_TITLE = "تحلیل بدون عنوان";
-
-            const payload = {
-                title: CURRENT_ANALYSIS_TITLE,
-                timestamp: Date.now(),
-                data: Object.values(FORMULA_DATA_MAP)
-            };
-
-            push(ref(db, 'analyses'), payload)
-                .then(() => {
-                    alert("تحلیل با موفقیت در فضای ابری ذخیره شد.");
-                    document.getElementById('btn-save-cloud').classList.add('hidden');
-                })
-                .catch((error) => {
-                    alert("خطا در ذخیره سازی: " + error.message);
-                });
-        }
-
         // --- Core Process ---
         window.processFilesAndImages = async function() {
-            if (!window.USER_API_KEY) return alert("لطفا کلید API را وارد کنید.");
+            if (!window.USER_API_KEY) return alert("لطفا کلید API را وارد کنید و متصل شوید.");
             if (UPLOADED_IMAGES.length === 0) return alert("لطفا حداقل یک تصویر فرمول آپلود کنید.");
 
             const btnText = document.getElementById('btn-text');
@@ -433,6 +448,7 @@
             const emptyState = document.getElementById('empty-state');
             const resultsContainer = document.getElementById('results-container');
             const saveBtn = document.getElementById('btn-save-cloud');
+            const titleInput = document.getElementById('analysis-title-input');
 
             btnText.textContent = "در حال پردازش...";
             loader.classList.remove('hidden');
@@ -440,10 +456,9 @@
             status.textContent = "تحلیل هوشمند محتوا...";
             status.className = "text-[10px] font-bold bg-blue-100 text-blue-600 px-3 py-1.5 rounded-full animate-pulse";
             emptyState.classList.add('hidden');
-            saveBtn.classList.add('hidden'); // Hide until finished
-            document.getElementById('analysis-title').textContent = '';
+            saveBtn.classList.add('hidden'); 
+            titleInput.value = '';
             
-            // Clear previous UI
             Array.from(resultsContainer.children).forEach(child => {
                 if (child.id !== 'empty-state') child.remove();
             });
@@ -451,15 +466,13 @@
             try {
                 const response = await callGemini();
                 
-                // Handle new structure { title: "...", analysis: [...] }
-                CURRENT_ANALYSIS_TITLE = response.title || "تحلیل جدید";
-                document.getElementById('analysis-title').textContent = CURRENT_ANALYSIS_TITLE;
+                // Set the suggested title in the input for editing
+                titleInput.value = response.title || "تحلیل جدید";
                 
                 renderResults(response.analysis);
-                
                 status.textContent = "تحلیل کامل شد";
                 status.className = "text-[10px] font-bold bg-emerald-100 text-emerald-600 px-3 py-1.5 rounded-full";
-                saveBtn.classList.remove('hidden'); // Show save button
+                saveBtn.classList.remove('hidden'); 
 
             } catch (error) {
                 console.error(error);
@@ -475,80 +488,35 @@
 
         async function callGemini() {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.USER_API_KEY}`;
-            
-            // UPDATED PROMPT: Requesting a Title and handling multiple images context
             const textPrompt = `
             You are an expert Mathematical Architect.
-            
-            CONTEXT FILES:
-            """${EXTRACTED_CONTEXT_TEXT.substring(0, 40000)}"""
-
+            CONTEXT FILES: """${EXTRACTED_CONTEXT_TEXT.substring(0, 40000)}"""
             TASK:
             1. Extract formulas from ALL provided images.
-            2. ALIGN with CONTEXT: Understand what the variables represent physically/economically.
-            3. **TITLE GENERATION**: Create a short, professional Persian title for this set of formulas based on their mathematical/scientific content (e.g. "تحلیل توابع عرضه و تقاضا").
-            
-            4. **CONTEXTUAL VISUALIZATION**: 
-               - Does the formula describe a relationship suitable for a 2D plot?
-               - IF YES: Generate 'chart_data' with 20 points based on realistic ranges from context.
-
-            FORMATTING RULES:
-            - **Inline Math**: Enclose ALL math variables in backticks (\`).
-            - **Strict Latex**: Inside backticks, use valid Katex.
-            - **Persian**: Descriptions must be in Persian.
-
-            OUTPUT JSON STRUCTURE:
-            {
-              "title": "Persian Title Here",
-              "analysis": [
-                  {
-                    "id": "f1",
-                    "latex": "Raw Latex",
-                    "description": "Persian text with \`math\` chips.",
-                    "context_match_found": boolean,
-                    "visualizable": boolean, 
-                    "chart_data": {
-                        "type": "line",
-                        "labels": [x1, x2...], 
-                        "dataset_label": "Persian Label",
-                        "data": [y1, y2...]
-                    }
-                  }
-              ]
-            }
+            2. ALIGN with CONTEXT.
+            3. **TITLE**: Generate a professional Persian title.
+            4. **VISUALIZATION**: Generate 20 data points if applicable.
+            OUTPUT JSON: { "title": "Persian Title", "analysis": [ ... ] }
             `;
-
-            // Combine text prompt with ALL uploaded images
             const parts = [{ text: textPrompt }, ...UPLOADED_IMAGES];
-            
             const response = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contents: [{ parts: parts }] })
             });
-
             const data = await response.json();
             if (data.error) throw new Error(data.error.message);
-            if (!data.candidates) throw new Error("No response from AI");
-
             const rawText = data.candidates[0].content.parts[0].text;
-            const jsonString = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-            return JSON.parse(jsonString);
+            return JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
         }
 
-        // --- Rendering Engine ---
         function formatPersianText(text) {
             if (!text) return '';
             return text.replace(/`([^`]+)`/g, (match, mathContent) => {
                 try {
-                    const rendered = katex.renderToString(mathContent, { 
-                        throwOnError: false, 
-                        displayMode: false 
-                    });
+                    const rendered = katex.renderToString(mathContent, { throwOnError: false, displayMode: false });
                     return `<span class="math-code" dir="ltr">${rendered}</span>`;
-                } catch (e) { 
-                    return `<span class="math-code" dir="ltr">${mathContent}</span>`; 
-                }
+                } catch (e) { return `<span class="math-code" dir="ltr">${mathContent}</span>`; }
             });
         }
 
@@ -556,7 +524,6 @@
             const container = document.getElementById('results-container');
             const emptyState = document.getElementById('empty-state');
             if(emptyState) emptyState.classList.add('hidden');
-            
             container.innerHTML = '';
             FORMULA_DATA_MAP = {};
 
@@ -564,68 +531,52 @@
 
             formulas.forEach((item, index) => {
                 FORMULA_DATA_MAP[item.id] = item;
-                
                 const card = document.createElement('div');
                 card.className = "relative pl-8 pb-10 border-l-2 border-slate-200 last:border-0 hover:border-blue-300 transition-colors";
-                
                 const dot = document.createElement('div');
                 dot.className = `absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white ${item.context_match_found ? 'bg-emerald-500 shadow-lg shadow-emerald-200' : 'bg-blue-500 shadow-lg shadow-blue-200'}`;
-                
                 const contentBox = document.createElement('div');
                 contentBox.className = "bg-white rounded-2xl p-6 border border-slate-100 shadow-sm hover:shadow-md transition-all duration-300";
-
+                
                 let badges = `<div class="flex flex-wrap gap-2 mb-4">`;
                 badges += `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-slate-100 text-slate-500 border border-slate-200">فرمول ${index + 1}</span>`;
                 if(item.context_match_found) badges += `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1">✓ تایید شده با متن</span>`;
                 badges += `</div>`;
-
+                
                 const desc = `<p class="text-sm text-slate-600 mb-5 leading-8 text-justify">${formatPersianText(item.description)}</p>`;
-
+                
                 const mathWrapper = document.createElement('div');
                 mathWrapper.className = "bg-slate-50 rounded-xl border border-dashed border-slate-300 p-6 text-center text-xl md:text-2xl overflow-x-auto mb-5 dir-ltr";
-                mathWrapper.style.direction = 'ltr';
-                mathWrapper.style.unicodeBidi = 'isolate';
-                
-                try {
-                    katex.render(item.latex, mathWrapper, { throwOnError: false, displayMode: true });
-                } catch(e) { mathWrapper.textContent = item.latex; }
+                mathWrapper.style.direction = 'ltr'; 
+                try { katex.render(item.latex, mathWrapper, { throwOnError: false, displayMode: true }); } 
+                catch(e) { mathWrapper.textContent = item.latex; }
 
                 let actions = '';
                 if(item.visualizable && item.chart_data) {
-                    actions = `
-                    <div class="flex justify-end pt-4 border-t border-slate-100">
-                        <button onclick="window.openChart('${item.id}')" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-md hover:shadow-indigo-500/30 text-xs font-bold transform active:scale-95">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
-                            رسم نمودار تعاملی
-                        </button>
-                    </div>`;
+                    actions = `<div class="flex justify-end pt-4 border-t border-slate-100"><button onclick="window.openChart('${item.id}')" class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl transition-all shadow-md hover:shadow-indigo-500/30 text-xs font-bold transform active:scale-95"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>رسم نمودار تعاملی</button></div>`;
                 }
 
                 contentBox.innerHTML = badges + desc;
                 contentBox.appendChild(mathWrapper);
                 if(actions) contentBox.insertAdjacentHTML('beforeend', actions);
-                
                 card.appendChild(dot);
                 card.appendChild(contentBox);
                 container.appendChild(card);
             });
         }
 
-        // --- Visualization & Popups ---
         window.openChart = function(id) {
             const data = FORMULA_DATA_MAP[id];
             if(!data || !data.chart_data) return;
-
             const popup = document.getElementById('chart-popup');
             const overlay = document.getElementById('overlay');
             const ctx = document.getElementById('vizCanvas').getContext('2d');
             const titleEl = document.getElementById('chart-subtitle');
-
+            
             const displayLatex = data.latex.includes('`') ? data.latex : '`' + data.latex + '`';
             titleEl.innerHTML = formatPersianText(`تحلیل رفتار: ${displayLatex}`);
-
+            
             if (currentChartInstance) currentChartInstance.destroy();
-
             currentChartInstance = new Chart(ctx, {
                 type: data.chart_data.type || 'line',
                 data: {
@@ -633,74 +584,27 @@
                     datasets: [{
                         label: data.chart_data.dataset_label, 
                         data: data.chart_data.data,
-                        borderColor: '#4f46e5',
-                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                        borderWidth: 3,
-                        pointBackgroundColor: '#fff',
-                        pointBorderColor: '#4f46e5',
-                        pointRadius: 6,
-                        pointHoverRadius: 9,
-                        tension: 0.4,
-                        fill: true
+                        borderColor: '#4f46e5', backgroundColor: 'rgba(79, 70, 229, 0.1)', borderWidth: 3, pointBackgroundColor: '#fff', pointBorderColor: '#4f46e5', pointRadius: 6, pointHoverRadius: 9, tension: 0.4, fill: true
                     }]
                 },
                 options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            enabled: false,
-                            external: (context) => {
-                                const tooltipEl = document.getElementById('chartjs-tooltip');
-                                const tooltipModel = context.tooltip;
-                                if(tooltipModel.opacity === 0) { tooltipEl.style.opacity = 0; return; }
-                                
-                                if(tooltipModel.body) {
-                                    const rawDatasetLabel = data.chart_data.dataset_label;
-                                    let innerHtml = `<div class="border-b pb-2 mb-2 border-gray-200 text-xs text-gray-500 font-bold">
-                                        ${formatPersianText(rawDatasetLabel)}
-                                    </div>`;
-                                    
-                                    tooltipModel.body.map(b => b.lines).forEach((b, i) => {
-                                        const value = context.tooltip.dataPoints[i].formattedValue;
-                                        innerHtml += `<div class="font-mono text-indigo-600 text-lg font-bold dir-ltr text-left">${value}</div>`;
-                                    });
-                                    
-                                    tooltipEl.innerHTML = innerHtml;
-                                }
-                                
-                                tooltipEl.style.opacity = 1;
-                                tooltipEl.style.left = tooltipModel.caretX + 'px';
-                                tooltipEl.style.top = tooltipModel.caretY + 'px';
-                            }
+                    responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { display: false }, tooltip: { enabled: false, external: (context) => {
+                        const tooltipEl = document.getElementById('chartjs-tooltip');
+                        const tooltipModel = context.tooltip;
+                        if(tooltipModel.opacity === 0) { tooltipEl.style.opacity = 0; return; }
+                        if(tooltipModel.body) {
+                            let innerHtml = `<div class="border-b pb-2 mb-2 border-gray-200 text-xs text-gray-500 font-bold">${formatPersianText(data.chart_data.dataset_label)}</div>`;
+                            tooltipModel.body.map(b => b.lines).forEach((b, i) => { innerHtml += `<div class="font-mono text-indigo-600 text-lg font-bold dir-ltr text-left">${context.tooltip.dataPoints[i].formattedValue}</div>`; });
+                            tooltipEl.innerHTML = innerHtml;
                         }
-                    },
-                    scales: {
-                        y: { 
-                            grid: { color: '#f1f5f9', borderDash: [5, 5] }, 
-                            border: { display: false },
-                            ticks: { font: { family: 'Inter' } } 
-                        },
-                        x: { 
-                            grid: { display: false }, 
-                            border: { display: false }, 
-                            ticks: { font: { family: 'Inter' } } 
-                        }
-                    }
+                        tooltipEl.style.opacity = 1; tooltipEl.style.left = tooltipModel.caretX + 'px'; tooltipEl.style.top = tooltipModel.caretY + 'px';
+                    }}}
                 }
             });
-
-            overlay.style.display = 'block';
-            popup.style.display = 'flex';
+            overlay.style.display = 'block'; popup.style.display = 'flex';
         }
-
-        window.closeAllPopups = function() {
-            document.getElementById('origin-popup').style.display = 'none';
-            document.getElementById('chart-popup').style.display = 'none';
-            document.getElementById('overlay').style.display = 'none';
-        }
+        window.closeAllPopups = function() { document.getElementById('origin-popup').style.display = 'none'; document.getElementById('chart-popup').style.display = 'none'; document.getElementById('overlay').style.display = 'none'; }
     </script>
 </body>
 </html>
