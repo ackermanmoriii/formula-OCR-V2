@@ -13,7 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script> <script src="https://cdn.tailwindcss.com"></script>
 
     <style>
         body { font-family: 'Vazirmatn', 'Inter', sans-serif; background-color: #f5f5f7; color: #1d1d1f; }
@@ -21,20 +21,32 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #d1d1d6; border-radius: 10px; }
         
+        /* Typography & Markdown Styles */
+        .markdown-body {
+            font-size: 0.95rem;
+            line-height: 1.8;
+            color: #334155;
+        }
+        .markdown-body strong { color: #0f172a; font-weight: 700; }
+        .markdown-body ul { list-style-type: disc; padding-right: 1.5em; margin-bottom: 1em; }
+        .markdown-body p { margin-bottom: 0.8em; }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 700; color: #1e293b; margin-top: 1em; margin-bottom: 0.5em; }
+
         /* Strict LTR for Math */
         .math-code {
             direction: ltr !important;
             unicode-bidi: isolate;
             display: inline-block;
-            background-color: #f1f5f9;
-            color: #0f172a;
-            padding: 3px 10px;
-            border-radius: 8px;
-            margin: 0 4px;
-            font-size: 1.05em;
-            border: 1px solid #e2e8f0;
+            margin: 0 2px;
             vertical-align: middle;
-            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Display Math Block */
+        .math-display {
+            direction: ltr !important;
+            display: block;
+            text-align: center;
+            margin: 1rem 0;
+            overflow-x: auto;
         }
 
         .glass-panel {
@@ -174,12 +186,12 @@
             <div class="apple-card p-5 flex-1 flex flex-col min-h-[200px]">
                 <h2 class="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
                     <span class="w-6 h-6 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs font-bold">3</span>
-                    کتابخانه تحلیل‌ها
+                    کتابخانه تحلیل‌ها (Firebase)
                 </h2>
                 <div id="user-display" class="hidden text-xs text-center mb-2 text-emerald-600 font-bold bg-emerald-50 py-1 rounded"></div>
                 
                 <div class="relative mb-3">
-                    <input type="text" id="search-db" oninput="window.filterSavedItems(this.value)" placeholder="جستجو در تحلیل‌های ذخیره شده..." class="w-full bg-slate-100 border-none rounded-lg text-xs py-2 px-3 focus:ring-2 focus:ring-emerald-500/20 outline-none">
+                    <input type="text" id="search-db" oninput="window.filterSavedItems(this.value)" placeholder="جستجو در تحلیل‌ها..." class="w-full bg-slate-100 border-none rounded-lg text-xs py-2 px-3 focus:ring-2 focus:ring-emerald-500/20 outline-none">
                     <svg class="w-4 h-4 text-slate-400 absolute left-2 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                 </div>
                 <div id="saved-list" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
@@ -249,7 +261,6 @@
         };
 
         const app = initializeApp(firebaseConfig);
-        const analytics = getAnalytics(app);
         const db = getDatabase(app);
 
         // --- Global State ---
@@ -276,14 +287,12 @@
             window.USER_API_KEY = apiInput.value.trim();
             window.CURRENT_USERNAME = userInput.value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
 
-            // UI Feedback
             status.textContent = "✓ متصل شد: " + window.CURRENT_USERNAME;
             status.style.opacity = '1';
             
             userDisplay.textContent = `کاربر: ${window.CURRENT_USERNAME}`;
             userDisplay.classList.remove('hidden');
 
-            // --- Database Listener ---
             if(activeDbListener) off(activeDbListener);
 
             const userDbRef = ref(db, `users/${window.CURRENT_USERNAME}/analyses`);
@@ -298,9 +307,24 @@
                     return;
                 }
 
-                const items = Object.entries(data).map(([key, value]) => ({ id: key, ...value })).reverse();
-                SAVED_ITEMS_CACHE = items;
-                renderSavedList(items);
+                // Logic: Convert to array, assign ID based on chronological order (index+1), then reverse for display
+                const items = Object.entries(data).map(([key, value]) => ({ 
+                    key: key, 
+                    ...value 
+                }));
+                
+                // Sort chronologically first to assign stable IDs
+                items.sort((a, b) => a.timestamp - b.timestamp);
+                
+                // Assign Sequential ID (1, 2, 3...)
+                const numberedItems = items.map((item, index) => ({
+                    ...item,
+                    displayId: index + 1
+                }));
+
+                // Now reverse for display (Newest First)
+                SAVED_ITEMS_CACHE = numberedItems.reverse();
+                renderSavedList(SAVED_ITEMS_CACHE);
             });
             
             setTimeout(() => status.style.opacity = '0', 3000);
@@ -316,10 +340,13 @@
                 el.onclick = () => loadAnalysisFromDb(item);
                 
                 el.innerHTML = `
-                    <div class="font-bold text-slate-700 text-xs truncate">${item.title || 'بدون عنوان'}</div>
-                    <div class="flex justify-between items-center">
+                    <div class="flex justify-between items-start">
+                        <div class="font-bold text-slate-700 text-xs truncate max-w-[70%]">${item.title || 'بدون عنوان'}</div>
+                        <span class="text-[10px] font-mono bg-blue-50 text-blue-600 px-1.5 rounded border border-blue-100">#${item.displayId}</span>
+                    </div>
+                    <div class="flex justify-between items-center mt-1">
                         <span class="text-[10px] text-slate-400">${new Date(item.timestamp).toLocaleDateString('fa-IR')}</span>
-                        <span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 rounded">${item.data.length} فرمول</span>
+                        <span class="text-[10px] bg-slate-50 text-slate-500 px-1.5 rounded">${item.data.length} فرمول</span>
                     </div>
                 `;
                 listContainer.appendChild(el);
@@ -329,7 +356,8 @@
         window.filterSavedItems = function(query) {
             if(!window.CURRENT_USERNAME) return;
             const filtered = SAVED_ITEMS_CACHE.filter(item => 
-                (item.title && item.title.includes(query))
+                (item.title && item.title.includes(query)) ||
+                (item.displayId && item.displayId.toString().includes(query))
             );
             renderSavedList(filtered);
         }
@@ -364,7 +392,7 @@
                 });
         }
 
-        // --- File Helpers ---
+        // --- File & Image Handling ---
         async function readPdf(file) {
             const arrayBuffer = await file.arrayBuffer();
             const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -466,12 +494,18 @@
         async function callGemini() {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${window.USER_API_KEY}`;
             
-            // STRONG PROMPT to force Persian and Clean LaTeX
+            // UPDATED PROMPT: Requesting Markdown + Strict LaTeX delimiters
             const textPrompt = `
             CRITICAL INSTRUCTIONS:
-            1. **LANGUAGE IS STRICTLY PERSIAN (FARSI)**: The context files might be in English, but your OUTPUT EXPLANATIONS MUST BE IN FLUENT PERSIAN. Do NOT output English descriptions.
-            2. **LATEX FORMAT**: Return PURE Latex strings for the formula. Do not enclose them in '$$', '\\[', or markdown blocks inside the JSON value. Just the latex code.
-
+            1. **LANGUAGE IS STRICTLY PERSIAN (FARSI)**.
+            2. **FORMATTING**:
+               - Use **Markdown** for text structuring (Bold, Lists, Headers).
+               - **MATH FORMULAS**: 
+                 - For INLINE math, wrap strictly in single dollar signs: $ E = mc^2 $
+                 - For BLOCK math, wrap strictly in double dollar signs: $$ \\sum_{i=0}^n i^2 $$
+                 - **DO NOT** use \\( ... \\) or \\[ ... \\]. Use $ and $$.
+                 - Ensure variable names inside Persian text are wrapped in $ to look like math (e.g., $X$, $y_{new}$).
+            
             CONTEXT FILES: """${EXTRACTED_CONTEXT_TEXT.substring(0, 40000)}"""
 
             TASK:
@@ -487,7 +521,7 @@
                     { 
                         "id": "f1", 
                         "latex": "x^2 + y^2", 
-                        "description": "توضیح کامل به زبان فارسی...", 
+                        "description": "Example: متغیر $x$ نشان‌دهنده **ورودی** است.", 
                         "context_match_found": true, 
                         "visualizable": true,
                         "chart_data": { ... } 
@@ -508,25 +542,50 @@
             return JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
         }
 
-        // Helper to clean potential markdown from Latex strings
         function cleanLatex(latex) {
             if (!latex) return "";
-            return latex
-                .replace(/^\\\[/, '') // Remove starting \[
-                .replace(/\\\]$/, '') // Remove ending \]
-                .replace(/^\$\$/, '') // Remove starting $$
-                .replace(/\$\$$/, '') // Remove ending $$
-                .trim();
+            return latex.replace(/^\\\[/, '').replace(/\\\]$/, '').replace(/^\$\$/, '').replace(/\$\$/, '').trim();
         }
 
-        function formatPersianText(text) {
+        // --- NEW RENDERER: Markdown + Math ---
+        function formatMarkdownWithMath(text) {
             if (!text) return '';
-            return text.replace(/`([^`]+)`/g, (match, mathContent) => {
-                try {
-                    const rendered = katex.renderToString(cleanLatex(mathContent), { throwOnError: false, displayMode: false });
-                    return `<span class="math-code" dir="ltr">${rendered}</span>`;
-                } catch (e) { return `<span class="math-code" dir="ltr">${mathContent}</span>`; }
+
+            // 1. Tokenize Math to protect it from Markdown parser
+            // We search for $$...$$ and $...$
+            const mathSegments = [];
+            
+            // Protect Block Math $$...$$
+            let protectedText = text.replace(/\$\$([\s\S]+?)\$\$/g, (match, math) => {
+                mathSegments.push({ type: 'display', math: math });
+                return `__MATH_BLOCK_${mathSegments.length - 1}__`;
             });
+
+            // Protect Inline Math $...$
+            protectedText = protectedText.replace(/\$([^$]+?)\$/g, (match, math) => {
+                mathSegments.push({ type: 'inline', math: math });
+                return `__MATH_INLINE_${mathSegments.length - 1}__`;
+            });
+
+            // 2. Parse Markdown
+            let html = marked.parse(protectedText);
+
+            // 3. Restore Math and Render with Katex
+            html = html.replace(/__MATH_BLOCK_(\d+)__/g, (match, id) => {
+                const seg = mathSegments[id];
+                try {
+                    return katex.renderToString(seg.math, { displayMode: true, throwOnError: false });
+                } catch(e) { return seg.math; }
+            });
+
+            html = html.replace(/__MATH_INLINE_(\d+)__/g, (match, id) => {
+                const seg = mathSegments[id];
+                try {
+                    return katex.renderToString(seg.math, { displayMode: false, throwOnError: false });
+                } catch(e) { return seg.math; }
+            });
+
+            return html;
         }
 
         function renderResults(formulas) {
@@ -554,21 +613,17 @@
                 if(item.context_match_found) badges += `<span class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center gap-1">✓ تایید شده با متن</span>`;
                 badges += `</div>`;
                 
-                const desc = `<p class="text-sm text-slate-600 mb-5 leading-8 text-justify">${formatPersianText(item.description)}</p>`;
+                // USE NEW RENDERER HERE
+                const desc = `<div class="markdown-body text-slate-600 mb-5 text-justify">${formatMarkdownWithMath(item.description)}</div>`;
                 
-                // MATH RENDER FIX:
                 const mathWrapper = document.createElement('div');
                 mathWrapper.className = "bg-slate-50 rounded-xl border border-dashed border-slate-300 p-6 text-center text-xl md:text-2xl overflow-x-auto mb-5 dir-ltr text-slate-800";
                 mathWrapper.style.direction = 'ltr'; 
                 
                 const cleanedLatex = cleanLatex(item.latex);
-                
                 try { 
                     katex.render(cleanedLatex, mathWrapper, { throwOnError: false, displayMode: true }); 
-                } catch(e) { 
-                    // Fallback if render fails: show raw text
-                    mathWrapper.textContent = cleanedLatex || "خطا در نمایش فرمول"; 
-                }
+                } catch(e) { mathWrapper.textContent = cleanedLatex || "خطا در نمایش فرمول"; }
 
                 let actions = '';
                 if(item.visualizable && item.chart_data) {
@@ -593,7 +648,8 @@
             const titleEl = document.getElementById('chart-subtitle');
             
             const displayLatex = cleanLatex(data.latex);
-            titleEl.innerHTML = formatPersianText(`تحلیل رفتار: \`${displayLatex}\``);
+            // Use formatMarkdownWithMath here too for consistency if needed, but simple wrap is fine
+            titleEl.innerHTML = `تحلیل رفتار: <span class="math-code">${katex.renderToString(displayLatex, {throwOnError: false})}</span>`;
             
             if (currentChartInstance) currentChartInstance.destroy();
             currentChartInstance = new Chart(ctx, {
@@ -613,7 +669,7 @@
                         const tooltipModel = context.tooltip;
                         if(tooltipModel.opacity === 0) { tooltipEl.style.opacity = 0; return; }
                         if(tooltipModel.body) {
-                            let innerHtml = `<div class="border-b pb-2 mb-2 border-gray-200 text-xs text-gray-500 font-bold">${formatPersianText(data.chart_data.dataset_label)}</div>`;
+                            let innerHtml = `<div class="border-b pb-2 mb-2 border-gray-200 text-xs text-gray-500 font-bold">${formatMarkdownWithMath(data.chart_data.dataset_label)}</div>`;
                             tooltipModel.body.map(b => b.lines).forEach((b, i) => { innerHtml += `<div class="font-mono text-indigo-600 text-lg font-bold dir-ltr text-left">${context.tooltip.dataPoints[i].formattedValue}</div>`; });
                             tooltipEl.innerHTML = innerHtml;
                         }
